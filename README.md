@@ -1,7 +1,7 @@
 #AlexNet Implementation with Theano
 
 Demonstration of training an AlexNet in python with Theano.
-Please see, and maybe kindly cite :) if you find it helpful, this technical report (link coming soon) for a high level description.
+Please see, and maybe kindly cite :) if you find it helpful, this [technical report](http://arxiv.org/abs/1412.2302) for a high level description.
 [theano_multi_gpu](https://github.com/uoguelph-mlrg/theano_multi_gpu) provides a toy example on how to use 2 GPUs to train a MLP on the mnist data.
 
 ## Dependencies
