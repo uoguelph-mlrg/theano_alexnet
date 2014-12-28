@@ -31,6 +31,8 @@ label_folder: /scratch/ilsvrc12/labels/
 mean_file: /scratch/ilsvrc12/misc/img_mean.npy
 weights_dir: ./models/  # directory for saving weights and results
 
+# conv library
+lib_conv: cudnn  # or cudaconvnet
 
 snapshot_freq: 1  # frequency of saving weights
 print_train_error: True
