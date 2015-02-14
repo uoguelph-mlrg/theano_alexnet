@@ -56,7 +56,7 @@ def crop_and_mirror(data, param_rand, flag_batch=True, cropsize=227):
         np.random.seed(int(10000 * param_rand[1]))
 
         data_out = np.zeros((data.shape[0], cropsize, cropsize,
-                                data.shape[3])).astype('float32')
+                             data.shape[3])).astype('float32')
 
         for ind in range(data.shape[3]):
             # generate random numbers
@@ -116,19 +116,19 @@ def fun_load(config, sock_data=5000):
         # getting the hkl file name to load
         hkl_name = recv_queue.get()
 
-
+        # print hkl_name
         data = hkl.load(hkl_name) - img_mean
         # print 'load ', time.time() - bgn_time
 
         if flag_randproc:
             param_rand = recv_queue.get()
-            
+
             data = crop_and_mirror(data, param_rand, flag_batch=flag_batch)
 
         gpu_data.set(data)
 
         # wait for computation on last minibatch to finish
-        msg = recv_queue.get()  
+        msg = recv_queue.get()
         assert msg == 'calc_finished'
 
         drv.memcpy_peer(gpu_data_remote.ptr,

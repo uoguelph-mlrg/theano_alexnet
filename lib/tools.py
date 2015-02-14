@@ -17,6 +17,13 @@ def save_weights(layers, weights_dir, epoch):
         if hasattr(layers[idx], 'b'):
             layers[idx].b.save_weight(
                 weights_dir, 'b' + '_' + str(idx) + '_' + str(epoch))
+        if hasattr(layers[idx], 'b0'):
+            layers[idx].b0.save_weight(
+                weights_dir, 'b0' + '_' + str(idx) + '_' + str(epoch))
+        if hasattr(layers[idx], 'b1'):
+            layers[idx].b1.save_weight(
+                weights_dir, 'b1' + '_' + str(idx) + '_' + str(epoch))
+
 
 
 def load_weights(layers, weights_dir, epoch):
@@ -33,6 +40,12 @@ def load_weights(layers, weights_dir, epoch):
         if hasattr(layers[idx], 'b'):
             layers[idx].b.load_weight(
                 weights_dir, 'b' + '_' + str(idx) + '_' + str(epoch))
+        if hasattr(layers[idx], 'b0'):
+            layers[idx].b0.load_weight(
+                weights_dir, 'b0' + '_' + str(idx) + '_' + str(epoch))
+        if hasattr(layers[idx], 'b1'):
+            layers[idx].b1.load_weight(
+                weights_dir, 'b1' + '_' + str(idx) + '_' + str(epoch))
 
 
 def save_momentums(vels, weights_dir, epoch):
