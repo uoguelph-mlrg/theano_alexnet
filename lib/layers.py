@@ -239,7 +239,7 @@ class DropoutLayer(object):
 
         self.prob_drop = prob_drop
         self.prob_keep = 1.0 - prob_drop
-        self.flag_on = T.shared(np.cast[theano.config.floatX](1.0))
+        self.flag_on = theano.shared(np.cast[theano.config.floatX](1.0))
         self.flag_off = 1.0 - self.flag_on
 
         seed_this = DropoutLayer.seed_common.randint(0, 2**31-1)
