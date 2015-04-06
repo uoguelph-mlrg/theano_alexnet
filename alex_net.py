@@ -19,7 +19,7 @@ class AlexNet(object):
         flag_datalayer = config['use_data_layer']
         lib_conv = config['lib_conv']
 
-        ###################### BUILD NETWORK ##########################
+        # ##################### BUILD NETWORK ##########################
         # allocate symbolic variables for the data
         # 'rand' is a random array used for random cropping/mirroring of data
         x = T.ftensor4('x')
@@ -123,10 +123,11 @@ class AlexNet(object):
         params += softmax_layer8.params
         weight_types += softmax_layer8.weight_type
 
-        ##################### NETWORK BUILT #######################
+        # #################### NETWORK BUILT #######################
 
         self.cost = softmax_layer8.negative_log_likelihood(y)
         self.errors = softmax_layer8.errors(y)
+        self.errors_top_5 = softmax_layer8.errors_top_x(y, 5)
         self.params = params
         self.x = x
         self.y = y
@@ -135,7 +136,7 @@ class AlexNet(object):
         self.batch_size = batch_size
 
 
-def compile_models(model, config):
+def compile_models(model, config, flag_top_5=False):
 
     x = model.x
     y = model.y
@@ -145,6 +146,7 @@ def compile_models(model, config):
     cost = model.cost
     params = model.params
     errors = model.errors
+    errors_top_5 = model.errors_top_5
     batch_size = model.batch_size
 
     mu = config['momentum']
@@ -216,7 +218,11 @@ def compile_models(model, config):
                                           (lr, learning_rate),
                                           (rand, rand_arr)])
 
-    validate_model = theano.function([], [cost, errors],
+    validate_outputs = [cost, errors]
+    if flag_top_5:
+        validate_outputs.append(errors_top_5)
+
+    validate_model = theano.function([], validate_outputs,
                                      givens=[(x, shared_x), (y, shared_y),
                                              (rand, rand_arr)])
 

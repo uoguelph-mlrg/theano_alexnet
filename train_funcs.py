@@ -61,13 +61,16 @@ def get_val_error_loss(rand_arr, shared_x, shared_y,
                        val_filenames, val_labels,
                        flag_datalayer, flag_para_load,
                        batch_size, validate_model,
-                       send_queue=None, recv_queue=None):
+                       send_queue=None, recv_queue=None,
+                       flag_top_5=False):
 
     if flag_datalayer:
         rand_arr.set_value(np.float32([0.5, 0.5, 0]))
 
     validation_losses = []
     validation_errors = []
+    if flag_top_5:
+        validation_errors_top_5 = []
 
     n_val_batches = len(val_filenames)
 
@@ -99,7 +102,12 @@ def get_val_error_loss(rand_arr, shared_x, shared_y,
 
         shared_y.set_value(val_labels[val_index * batch_size:
                                       (val_index + 1) * batch_size])
-        loss, error = validate_model()
+
+        if flag_top_5:
+            loss, error, error_top_5 = validate_model()
+        else:
+            loss, error = validate_model()
+
 
         if flag_para_load and (val_index + 1 < n_val_batches):
             send_queue.put('calc_finished')
@@ -108,10 +116,18 @@ def get_val_error_loss(rand_arr, shared_x, shared_y,
         validation_losses.append(loss)
         validation_errors.append(error)
 
+        if flag_top_5:
+            validation_errors_top_5.append(error_top_5)
+
+
     this_validation_loss = np.mean(validation_losses)
     this_validation_error = np.mean(validation_errors)
 
-    return this_validation_error, this_validation_loss
+    if flag_top_5:
+        this_validation_error_top_5 = np.mean(validation_errors_top_5)
+        return this_validation_error, this_validation_error_top_5, this_validation_loss
+    else:
+        return this_validation_error, this_validation_loss
 
 
 def get_rand3d():

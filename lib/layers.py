@@ -44,7 +44,7 @@ class DataLayer(object):
 
     def __init__(self, input, image_shape, cropsize, rand, mirror, flag_rand):
         '''
-        The random mirroring and cropping in this function is done for the 
+        The random mirroring and cropping in this function is done for the
         whole batch.
         '''
 
@@ -212,7 +212,7 @@ class ConvPoolLayer(object):
             self.params = [self.W0.val, self.b0.val, self.W1.val, self.b1.val]
             self.weight_type = ['W', 'b', 'W', 'b']
 
-        print "conv ({}) layer with shape_in: {}".format(lib_conv, 
+        print "conv ({}) layer with shape_in: {}".format(lib_conv,
                                                          str(image_shape))
 
 
@@ -277,6 +277,7 @@ class SoftmaxLayer(object):
 
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
 
+
         self.params = [self.W.val, self.b.val]
         self.weight_type = ['W', 'b']
 
@@ -295,5 +296,19 @@ class SoftmaxLayer(object):
             # the T.neq operator returns a vector of 0s and 1s, where 1
             # represents a mistake in prediction
             return T.mean(T.neq(self.y_pred, y))
+        else:
+            raise NotImplementedError()
+
+    def errors_top_x(self, y, num_top=5):
+        if y.ndim != self.y_pred.ndim:
+            raise TypeError('y should have the same shape as self.y_pred',
+                            ('y', y.type, 'y_pred', self.y_pred.type))
+        # check if y is of the correct datatype
+        if y.dtype.startswith('int'):
+            # the T.neq operator returns a vector of 0s and 1s, where 1
+            # represents a mistake in prediction
+            y_pred_top_x = T.argsort(self.p_y_given_x, axis=1)[:, -num_top:]
+            y_top_x = y.reshape((y.shape[0], 1)).repeat(num_top, axis=1)
+            return T.mean(T.min(T.neq(y_pred_top_x, y_top_x), axis=1))
         else:
             raise NotImplementedError()
