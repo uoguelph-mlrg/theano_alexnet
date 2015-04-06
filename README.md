@@ -59,6 +59,11 @@ Validation error and loss values are stored as weights_dir/val_record.npy
 
 Here we do not set device to gpu in THEANO_FLAGS. Instead, users should control which GPU(s) to use in spec_1gpu.yaml and spec_2gpu.yaml.
 
+### Pretrained AlexNet
+
+Pretrained AlexNet weights and configurations can be found at [pretrained/alexnet](https://github.com/uoguelph-mlrg/theano_alexnet/tree/master/pretrained/alexnet)
+
+
 ## Acknowledgement
 *Frédéric Bastien*, for providing the example of [Using Multiple GPUs](https://github.com/Theano/Theano/wiki/Using-Multiple-GPUs)
 
