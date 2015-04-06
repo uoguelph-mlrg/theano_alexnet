@@ -36,8 +36,8 @@ class Weight(object):
 
     def load_weight(self, dir, name):
         print 'weight loaded: ' + name
-        np_values = np.load(dir + name + '.npy')
-        self.val.set_value(np_values)
+        self.np_values = np.load(dir + name + '.npy')
+        self.val.set_value(self.np_values)
 
 
 class DataLayer(object):
@@ -239,10 +239,10 @@ class DropoutLayer(object):
 
         self.prob_drop = prob_drop
         self.prob_keep = 1.0 - prob_drop
-        self.flag_on = T.shared(np.cast[theano.config.floatX](1.0))
+        self.flag_on = theano.shared(np.cast[theano.config.floatX](1.0))
         self.flag_off = 1.0 - self.flag_on
 
-        seed_this = DropoutLayer.seed_common.randint(0, sys.maxint)
+        seed_this = DropoutLayer.seed_common.randint(0, 2**31-1)
         mask_rng = theano.tensor.shared_randomstreams.RandomStreams(seed_this)
         self.mask = mask_rng.binomial(n=1, p=self.prob_keep, size=input.shape)
 
