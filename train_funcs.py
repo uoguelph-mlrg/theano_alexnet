@@ -6,6 +6,7 @@ import numpy as np
 
 import hickle as hkl
 
+from proc_load import crop_and_mirror  ########BUG1 FIXED##############
 
 def proc_configs(config):
     if not os.path.exists(config['weights_dir']):
@@ -98,6 +99,14 @@ def get_val_error_loss(rand_arr, shared_x, shared_y,
                     send_queue.put(np.float32([0.5, 0.5, 0]))
         else:
             val_img = hkl.load(str(val_filenames[val_index]))
+            ####BUG 1 FIXED(INPUT SIZE DIFFERENT AND MATRIX DIMENSION MISMATCH BUG)##
+            if flag_datalayer:
+                param_rand = [0.5,0.5,0]
+            else:
+                param_rand = get_rand3d()
+               
+            val_img = crop_and_mirror(val_img, param_rand, flag_batch=True)
+            #######################################################################            
             shared_x.set_value(val_img)
 
         shared_y.set_value(val_labels[val_index * batch_size:
@@ -158,6 +167,14 @@ def train_model_wrap(train_model, shared_x, shared_y, rand_arr, img_mean,
 
     else:
         batch_img = hkl.load(str(train_filenames[minibatch_index])) - img_mean
+        ###BUG 1 FIXED:(INPUT SIZE DIFFERENT AND MATRIX DIMENSION MISMATCH BUG) ##
+        if flag_datalayer:
+            param_rand = [0.5,0.5,0]
+        else:
+            param_rand = get_rand3d()
+           
+        batch_img = crop_and_mirror(batch_img, param_rand, flag_batch=True)
+        #####################################################################           
         shared_x.set_value(batch_img)
 
     batch_label = train_labels[minibatch_index * batch_size:
