@@ -100,12 +100,9 @@ def get_val_error_loss(rand_arr, shared_x, shared_y,
         else:
             val_img = hkl.load(str(val_filenames[val_index]))
             ####BUG 1 FIXED(INPUT SIZE DIFFERENT AND MATRIX DIMENSION MISMATCH BUG)##
-            if flag_datalayer:
-                param_rand = [0.5,0.5,0]
-            else:
-                param_rand = get_rand3d()
-               
-            val_img = crop_and_mirror(val_img, param_rand, flag_batch=True)
+            if not flag_datalayer:
+                param_rand = [0.5,0.5,0]              
+                val_img = crop_and_mirror(val_img, param_rand, flag_batch=True)
             #######################################################################            
             shared_x.set_value(val_img)
 
@@ -148,7 +145,8 @@ def get_rand3d():
 def train_model_wrap(train_model, shared_x, shared_y, rand_arr, img_mean,
                      count, minibatch_index, minibatch_range, batch_size,
                      train_filenames, train_labels,
-                     flag_para_load, flag_datalayer,
+                     flag_para_load, flag_datalayer, 
+                     flag_batch,######BUG 1 FIXED########
                      send_queue=None, recv_queue=None):
 
     if flag_para_load:
@@ -168,12 +166,9 @@ def train_model_wrap(train_model, shared_x, shared_y, rand_arr, img_mean,
     else:
         batch_img = hkl.load(str(train_filenames[minibatch_index])) - img_mean
         ###BUG 1 FIXED:(INPUT SIZE DIFFERENT AND MATRIX DIMENSION MISMATCH BUG) ##
-        if flag_datalayer:
-            param_rand = [0.5,0.5,0]
-        else:
-            param_rand = get_rand3d()
-           
-        batch_img = crop_and_mirror(batch_img, param_rand, flag_batch=True)
+        if not flag_datalayer:
+            param_rand = get_rand3d()           
+            batch_img = crop_and_mirror(batch_img, param_rand, flag_batch=flag_batch)
         #####################################################################           
         shared_x.set_value(batch_img)
 
