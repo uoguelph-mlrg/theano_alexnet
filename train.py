@@ -18,7 +18,7 @@ from train_funcs import (unpack_configs, adjust_learning_rate,
 def train_net(config):
 
     # UNPACK CONFIGS
-    (flag_para_load, flag_datalayer, train_filenames, val_filenames,
+    (flag_para_load, train_filenames, val_filenames,
      train_labels, val_labels, img_mean) = unpack_configs(config)
 
     if flag_para_load:
@@ -98,8 +98,7 @@ def train_net(config):
         if flag_para_load:
             # send the initial message to load data, before each epoch
             load_send_queue.put(str(train_filenames[minibatch_range[0]]))
-            if not flag_datalayer:
-                load_send_queue.put(get_rand3d())
+            load_send_queue.put(get_rand3d())
 
             # clear the sync before 1st calc
             load_send_queue.put('calc_finished')
@@ -120,7 +119,7 @@ def train_net(config):
                                        count, minibatch_index,
                                        minibatch_range, batch_size,
                                        train_filenames, train_labels,
-                                       flag_para_load, flag_datalayer,
+                                       flag_para_load,
                                        config['batch_crop_mirror'],###BUG 1 FIXED#####
                                        send_queue=load_send_queue,
                                        recv_queue=load_recv_queue)
@@ -142,7 +141,7 @@ def train_net(config):
         this_validation_error, this_validation_loss = get_val_error_loss(
             rand_arr, shared_x, shared_y,
             val_filenames, val_labels,
-            flag_datalayer, flag_para_load,
+            flag_para_load,
             batch_size, validate_model,
             send_queue=load_send_queue, recv_queue=load_recv_queue)
 
