@@ -141,7 +141,7 @@ def train_net(config):
         this_validation_error, this_validation_loss = get_val_error_loss(
             rand_arr, shared_x, shared_y,
             val_filenames, val_labels,
-            flag_para_load,
+            flag_para_load, img_mean,
             batch_size, validate_model,
             send_queue=load_send_queue, recv_queue=load_recv_queue)
 

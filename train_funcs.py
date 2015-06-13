@@ -59,7 +59,7 @@ def adjust_learning_rate(config, epoch, step_idx, val_record, learning_rate):
 
 def get_val_error_loss(rand_arr, shared_x, shared_y,
                        val_filenames, val_labels,
-                       flag_para_load,
+                       flag_para_load, img_mean,
                        batch_size, validate_model,
                        send_queue=None, recv_queue=None,
                        flag_top_5=False):
@@ -91,7 +91,7 @@ def get_val_error_loss(rand_arr, shared_x, shared_y,
                 send_queue.put(name_to_read)
                 send_queue.put(np.float32([0.5, 0.5, 0]))
         else:
-            val_img = hkl.load(str(val_filenames[val_index]))
+            val_img = hkl.load(str(val_filenames[val_index])) - img_mean
             ####BUG 1 FIXED(INPUT SIZE DIFFERENT AND MATRIX DIMENSION MISMATCH BUG)##
             param_rand = [0.5,0.5,0]              
             val_img = crop_and_mirror(val_img, param_rand, flag_batch=True)

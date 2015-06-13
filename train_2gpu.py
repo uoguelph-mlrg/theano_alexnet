@@ -182,11 +182,8 @@ def train_net(config, private_config):
 
             num_iter = (epoch - 1) * n_train_batches + count
             count = count + 1
-            if count == 1:
+            if count%20 == 1:
                 s = time.time()
-            if count == 20:
-                e = time.time()
-                print "time per 20 iter:", (e - s)
 
             cost_ij = train_model_wrap(train_model, shared_x,
                                        shared_y, rand_arr, img_mean,
@@ -248,6 +245,10 @@ def train_net(config, private_config):
             if flag_para_load and (count < len(minibatch_range)):
                 load_send_queue.put('calc_finished')
 
+            if count%20 == 0:
+                e = time.time()
+                print "time per 20 iter:", (e - s)
+                
         ############### Test on Validation Set ##################
 
         DropoutLayer.SetDropoutOff()
@@ -255,7 +256,7 @@ def train_net(config, private_config):
         this_val_error, this_val_loss = get_val_error_loss(
             rand_arr, shared_x, shared_y,
             val_filenames, val_labels,
-            flag_para_load,
+            flag_para_load, img_mean,
             batch_size, validate_model,
             send_queue=load_send_queue, recv_queue=load_recv_queue)
 
