@@ -17,7 +17,7 @@ from train_funcs import (unpack_configs, get_val_error_loss,
 def validate_performance(config):
 
     # UNPACK CONFIGS
-    (flag_para_load, flag_datalayer, train_filenames, val_filenames,
+    (flag_para_load,  train_filenames, val_filenames,
      train_labels, val_labels, img_mean) = unpack_configs(config)
 
     if flag_para_load:
@@ -63,17 +63,19 @@ def validate_performance(config):
             shared_x.container.value)
         h = drv.mem_get_ipc_handle(gpuarray_batch.ptr)
         sock.send_pyobj((gpuarray_batch.shape, gpuarray_batch.dtype, h))
+        load_send_queue.put(img_mean)
+    
 
     load_epoch = config['load_epoch']
     load_weights(layers, config['weights_dir'], load_epoch)
 
     DropoutLayer.SetDropoutOff()
 
-    load_send_queue.put(img_mean)
+    
     this_validation_error, this_validation_error_top_5, this_validation_loss = \
         get_val_error_loss(rand_arr, shared_x, shared_y,
                            val_filenames, val_labels,
-                           flag_datalayer, flag_para_load,
+                           flag_para_load,img_mean,
                            batch_size, validate_model,
                            send_queue=load_send_queue,
                            recv_queue=load_recv_queue,
@@ -101,7 +103,7 @@ if __name__ == '__main__':
     config = proc_configs(config)
 
     config['resume_train'] = True
-    config['load_epoch'] = 65
+    config['load_epoch'] = 60
 
     if config['para_load']:
         from proc_load import fun_load

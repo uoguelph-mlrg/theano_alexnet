@@ -89,7 +89,6 @@ def fun_load(config, sock_data=5000):
     # send_queue is only for sending
 
     # if need to do random crop and mirror
-    flag_randproc = not config['use_data_layer']
     flag_batch = config['batch_crop_mirror']
 
     drv.init()
@@ -120,10 +119,9 @@ def fun_load(config, sock_data=5000):
         data = hkl.load(hkl_name) - img_mean
         # print 'load ', time.time() - bgn_time
 
-        if flag_randproc:
-            param_rand = recv_queue.get()
+        param_rand = recv_queue.get()
 
-            data = crop_and_mirror(data, param_rand, flag_batch=flag_batch)
+        data = crop_and_mirror(data, param_rand, flag_batch=flag_batch)
 
         gpu_data.set(data)
 
