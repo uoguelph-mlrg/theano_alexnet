@@ -21,11 +21,13 @@ def train_net(config):
     (flag_para_load, train_filenames, val_filenames,
      train_labels, val_labels, img_mean) = unpack_configs(config)
 
+    # pycuda set up
+    drv.init()
+    dev = drv.Device(int(config['gpu'][-1]))
+    ctx = dev.make_context()
+    
     if flag_para_load:
-        # pycuda and zmq set up
-        drv.init()
-        dev = drv.Device(int(config['gpu'][-1]))
-        ctx = dev.make_context()
+        #  zmq set up
         sock = zmq.Context().socket(zmq.PAIR)
         sock.connect('tcp://localhost:{0}'.format(config['sock_data']))
 
@@ -120,7 +122,7 @@ def train_net(config):
                                        minibatch_range, batch_size,
                                        train_filenames, train_labels,
                                        flag_para_load,
-                                       config['batch_crop_mirror'],###BUG 1 FIXED#####
+                                       config['batch_crop_mirror'],
                                        send_queue=load_send_queue,
                                        recv_queue=load_recv_queue)
 
