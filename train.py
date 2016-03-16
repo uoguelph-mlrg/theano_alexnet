@@ -89,13 +89,13 @@ def train_net(config):
         if config['resume_train'] and epoch == 1:
             load_epoch = config['load_epoch']
             load_weights(layers, config['weights_dir'], load_epoch)
-            epoch = load_epoch + 1
             lr_to_load = np.load(
                 config['weights_dir'] + 'lr_' + str(load_epoch) + '.npy')
             val_record = list(
                 np.load(config['weights_dir'] + 'val_record.npy'))
             learning_rate.set_value(lr_to_load)
-            load_momentums(vels, config['weights_dir'], epoch)
+            load_momentums(vels, config['weights_dir'], load_epoch)
+            epoch = load_epoch + 1
 
         if flag_para_load:
             # send the initial message to load data, before each epoch
