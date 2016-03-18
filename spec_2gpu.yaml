@@ -1,7 +1,7 @@
 # If want to input None, use !!null
 
 gpu0: 'gpu0'
-gpu1: 'gpu2'
+gpu1: 'gpu1'
 sock_gpu: 5000
 sock_data0: 5001
 sock_data1: 5002

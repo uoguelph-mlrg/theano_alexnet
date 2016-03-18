@@ -191,7 +191,7 @@ def train_net(config, private_config):
                                        minibatch_range, batch_size,
                                        train_filenames, train_labels,
                                        flag_para_load,
-                                       config['batch_crop_mirror']
+                                       config['batch_crop_mirror'],
                                        send_queue=load_send_queue,
                                        recv_queue=load_recv_queue)
 
