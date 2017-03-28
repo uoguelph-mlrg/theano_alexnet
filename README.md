@@ -1,4 +1,4 @@
-#AlexNet Implementation with Theano
+# AlexNet Implementation with Theano
 
 Demonstration of training an AlexNet in Python with Theano.
 Please see this [technical report](http://arxiv.org/abs/1412.2302) for a high level description.
