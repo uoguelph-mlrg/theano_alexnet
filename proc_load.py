@@ -6,21 +6,24 @@ import time
 import math
 
 import numpy as np
-import zmq
-import pycuda.driver as drv
-import pycuda.gpuarray as gpuarray
+import zmq,os
+if os.environ['backend']=='gpuarray':
+    import pygpu
+else:
+    import pycuda.driver as drv
+    import pycuda.gpuarray as gpuarray
 import hickle as hkl
 
 
 def get_params_crop_and_mirror(param_rand, data_shape, cropsize):
 
     center_margin = (data_shape[2] - cropsize) / 2
-    crop_xs = round(param_rand[0] * center_margin * 2)
-    crop_ys = round(param_rand[1] * center_margin * 2)
+    crop_xs = int(round(param_rand[0] * center_margin * 2))
+    crop_ys = int(round(param_rand[1] * center_margin * 2))
     if False:
         # this is true then exactly replicate Ryan's code, in the batch case
-        crop_xs = math.floor(param_rand[0] * center_margin * 2)
-        crop_ys = math.floor(param_rand[1] * center_margin * 2)
+        crop_xs = int(math.floor(param_rand[0] * center_margin * 2))
+        crop_ys = int(math.floor(param_rand[1] * center_margin * 2))
 
     flag_mirror = bool(round(param_rand[2]))
 
@@ -90,19 +93,27 @@ def fun_load(config, sock_data=5000):
 
     # if need to do random crop and mirror
     flag_batch = config['batch_crop_mirror']
-
-    drv.init()
-    dev = drv.Device(int(config['gpu'][-1]))
-    ctx = dev.make_context()
+    if os.environ['backend']=='gpuarray':
+        ctx = pygpu.init(config['gpu'])
+    else:
+        drv.init()
+        dev = drv.Device(int(config['gpu'][-1]))
+        ctx = dev.make_context()
+        
     sock = zmq.Context().socket(zmq.PAIR)
     sock.bind('tcp://*:{0}'.format(sock_data))
 
     shape, dtype, h = sock.recv_pyobj()
     print 'shared_x information received'
-
-    gpu_data_remote = gpuarray.GPUArray(shape, dtype,
+    
+    if os.environ['backend']=='gpuarray':
+        gpu_data_remote_b = pygpu.gpuarray.open_ipc_handle(ctx, h, np.prod(shape)*dtype.itemsize)
+        gpu_data_remote = pygpu.gpuarray.from_gpudata(gpu_data_remote_b, 0, dtype, shape, ctx)
+        gpu_data = pygpu.empty(shape, dtype, context=ctx)
+    else:
+        gpu_data_remote = gpuarray.GPUArray(shape, dtype,
                                         gpudata=drv.IPCMemoryHandle(h))
-    gpu_data = gpuarray.GPUArray(shape, dtype)
+        gpu_data = gpuarray.GPUArray(shape, dtype)
 
     img_mean = recv_queue.get()
     print 'img_mean received'
@@ -122,19 +133,25 @@ def fun_load(config, sock_data=5000):
         param_rand = recv_queue.get()
 
         data = crop_and_mirror(data, param_rand, flag_batch=flag_batch)
-
-        gpu_data.set(data)
+        
+        if os.environ['backend']=='gpuarray':
+            gpu_data.write(data)
+        else:
+            gpu_data.set(data)
 
         # wait for computation on last minibatch to finish
         msg = recv_queue.get()
         assert msg == 'calc_finished'
+        
+        if os.environ['backend']=='gpuarray':
+            gpu_data_remote[:] = gpu_data
+        else:
+            drv.memcpy_peer(gpu_data_remote.ptr,
+                            gpu_data.ptr,
+                            gpu_data.dtype.itemsize *
+                            gpu_data.size,
+                            ctx, ctx)
 
-        drv.memcpy_peer(gpu_data_remote.ptr,
-                        gpu_data.ptr,
-                        gpu_data.dtype.itemsize *
-                        gpu_data.size,
-                        ctx, ctx)
-
-        ctx.synchronize()
+            ctx.synchronize()
 
         send_queue.put('copy_finished')

@@ -1,11 +1,10 @@
-import sys
+import sys,os
 import time
 from multiprocessing import Process, Queue
 
 import yaml
 import numpy as np
 import zmq
-import pycuda.driver as drv
 
 sys.path.append('./lib')
 from tools import (save_weights, load_weights,
@@ -20,11 +19,6 @@ def train_net(config):
     # UNPACK CONFIGS
     (flag_para_load, train_filenames, val_filenames,
      train_labels, val_labels, img_mean) = unpack_configs(config)
-
-    # pycuda set up
-    drv.init()
-    dev = drv.Device(int(config['gpu'][-1]))
-    ctx = dev.make_context()
     
     if flag_para_load:
         #  zmq set up
@@ -37,16 +31,32 @@ def train_net(config):
         load_send_queue = None
         load_recv_queue = None
 
-    import theano.sandbox.cuda
-    theano.sandbox.cuda.use(config['gpu'])
+    if os.environ['backend']=='gpuarray':
+        if 'THEANO_FLAGS' in os.environ:
+            raise ValueError('Use theanorc to set the theano config')
+        os.environ['THEANO_FLAGS'] = 'mode=FAST_RUN,floatX=float32,device={0}'.format(config['gpu'])
+        import theano.gpuarray
+        # This is a bit of black magic that may stop working in future
+        # theano releases
+        ctx = theano.gpuarray.type.get_context(None)
+    else:
+        # pycuda set up
+        import pycuda.driver as drv
+        drv.init()
+        dev = drv.Device(int(config['gpu'][-1]))
+        ctx = dev.make_context()
+        
+        import theano.gpuarray
+        theano.gpuarray.use(config['gpu'])
+        
+        import theano.misc.pycuda_init
+        import theano.misc.pycuda_utils
+        
     import theano
     theano.config.on_unused_input = 'warn'
 
     from layers import DropoutLayer
     from alex_net import AlexNet, compile_models
-
-    import theano.misc.pycuda_init
-    import theano.misc.pycuda_utils
 
     ## BUILD NETWORK ##
     model = AlexNet(config)
@@ -64,9 +74,16 @@ def train_net(config):
 
     if flag_para_load:
         # pass ipc handle and related information
-        gpuarray_batch = theano.misc.pycuda_utils.to_gpuarray(
-            shared_x.container.value)
-        h = drv.mem_get_ipc_handle(gpuarray_batch.ptr)
+        
+        if os.environ['backend']=='gpuarray':
+            gpuarray_batch = shared_x.container.value
+            h = gpuarray_batch.get_ipc_handle()
+            
+        else:
+            gpuarray_batch = theano.misc.pycuda_utils.to_gpuarray(
+                shared_x.container.value)
+            h = drv.mem_get_ipc_handle(gpuarray_batch.ptr)
+        
         sock.send_pyobj((gpuarray_batch.shape, gpuarray_batch.dtype, h))
 
         load_send_queue.put(img_mean)

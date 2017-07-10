@@ -17,9 +17,10 @@ If you use this in your research, we kindly ask that you cite the above report:
 
 ## Dependencies
 * [numpy](http://www.numpy.org/)
-* [Theano](http://deeplearning.net/software/theano/)
-* [Pylearn2](http://deeplearning.net/software/pylearn2/)
-* [PyCUDA](http://mathema.tician.de/software/pycuda/)
+* [Theano](http://deeplearning.net/software/theano/) >= 0.10
+* ---[Pylearn2](http://deeplearning.net/software/pylearn2/)---
+* ---[PyCUDA](http://mathema.tician.de/software/pycuda/)---
+* [pygpu/libgpuarray](http://deeplearning.net/software/libgpuarray/installation.html)
 * [zeromq](http://zeromq.org/bindings:python)
 * [hickle](https://github.com/telegraphic/hickle)
 
@@ -49,7 +50,7 @@ If you changed preprocessing/paths.yaml, make sure you change corresponding path
 
 1-GPU version, run:
 
-THEANO_FLAGS=mode=FAST_RUN,floatX=float32 python train.py
+backend=gpuarray ---THEANO_FLAGS=mode=FAST_RUN,floatX=float32--- python train.py
 
 2-GPU version, run:
 

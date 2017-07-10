@@ -1,13 +1,16 @@
-import sys
+import sys,os
 
 import numpy as np
 import theano
 import theano.tensor as T
-from theano.sandbox.cuda import dnn
-from theano.sandbox.cuda.basic_ops import gpu_contiguous
-from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
-from pylearn2.sandbox.cuda_convnet.pool import MaxPool
-from pylearn2.expr.normalize import CrossChannelNormalization
+if os.environ['backend']=='gpuarray':
+    from theano.gpuarray import dnn
+    from theano.gpuarray.basic_ops import gpu_contiguous
+else:
+    from theano.sandbox.cuda import dnn
+    from theano.sandbox.cuda.basic_ops import gpu_contiguous
+
+# from pylearn2.expr.normalize import CrossChannelNormalization
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -16,7 +19,52 @@ rng = np.random.RandomState(23455)
 # set a fixed number for 2 purpose:
 #  1. repeatable experiments; 2. for multiple-GPU, the same initial weights
 
+class CrossChannelNormalization(object):
+    """
+    See "ImageNet Classification with Deep Convolutional Neural Networks"
+    Alex Krizhevsky, Ilya Sutskever, and Geoffrey E. Hinton
+    NIPS 2012
+    Section 3.3, Local Response Normalization
+    .. todo::
+        WRITEME properly
+    f(c01b)_[i,j,k,l] = c01b[i,j,k,l] / scale[i,j,k,l]
+    scale[i,j,k,l] = (k + sqr(c01b)[clip(i-n/2):clip(i+n/2),j,k,l].sum())^beta
+    clip(i) = T.clip(i, 0, c01b.shape[0]-1)
+    
+    reproduced from https://github.com/lisa-lab/pylearn2/blob/master/pylearn2/expr/normalize.py to remove pylearn2 dependency
+    """
 
+    def __init__(self, alpha = 1e-4, k=2, beta=0.75, n=5):
+        self.__dict__.update(locals())
+        del self.self
+
+        if n % 2 == 0:
+            raise NotImplementedError("Only works with odd n for now")
+
+    def __call__(self, c01b):
+        """
+        .. todo::
+            WRITEME
+        """
+        half = self.n // 2
+
+        sq = T.sqr(c01b)
+
+        ch, r, c, b = c01b.shape
+
+        extra_channels = T.alloc(0., ch + 2*half, r, c, b)
+
+        sq = T.set_subtensor(extra_channels[half:half+ch,:,:,:], sq)
+
+        scale = self.k
+
+        for i in xrange(self.n):
+            scale += self.alpha * sq[i:i+ch,:,:,:]
+
+        scale = scale ** self.beta
+
+        return c01b / scale
+        
 class Weight(object):
 
     def __init__(self, w_shape, mean=0, std=0.01):
@@ -111,6 +159,7 @@ class ConvPoolLayer(object):
             self.b1 = Weight(self.filter_shape[3], bias_init, std=0)
 
         if lib_conv == 'cudaconvnet':
+            from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
             self.conv_op = FilterActs(pad=self.padsize, stride=self.convstride,
                                       partial_sum=1)
 
@@ -144,6 +193,7 @@ class ConvPoolLayer(object):
 
             # Pooling
             if self.poolsize != 1:
+                from pylearn2.sandbox.cuda_convnet.pool import MaxPool
                 self.pool_op = MaxPool(ds=poolsize, stride=poolstride)
                 self.output = self.pool_op(self.output)
 

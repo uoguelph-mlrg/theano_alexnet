@@ -1,6 +1,6 @@
 # If want to input None, use !!null
 
-gpu: 'gpu0'
+gpu: 'cuda0'
 sock_data: 5001
 
 batch_size: 256 # def: 256
