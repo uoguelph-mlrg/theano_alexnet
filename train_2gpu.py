@@ -191,13 +191,13 @@ def train_net(config, private_config):
 
             param_ga_remote_list.append(param_ga_remote)
 
-    print "Information passed between 2 GPUs"
+    print("Information passed between 2 GPUs")
 
     ##########################################
 
     ######################### TRAIN MODEL ################################
 
-    print '... training'
+    print('... training')
 
     if flag_para_load:
         # pass ipc handle and related information
@@ -316,8 +316,8 @@ def train_net(config, private_config):
                     cost_ij = (cost_ij + that_cost) / 2.
 
                 if private_config['flag_verbose']:
-                    print 'training @ iter = ', num_iter
-                    print 'training cost:', cost_ij
+                    print('training @ iter = ', num_iter)
+                    print('training cost:', cost_ij)
 
                 if config['print_train_error']:
                     error_ij = train_error()
@@ -332,14 +332,14 @@ def train_net(config, private_config):
                         error_ij = (error_ij + that_error) / 2.
 
                     if private_config['flag_verbose']:
-                        print 'training error rate:', error_ij
+                        print('training error rate:', error_ij)
 
             if flag_para_load and (count < len(minibatch_range)):
                 load_send_queue.put('calc_finished')
 
             if count%20 == 0:
                 e = time.time()
-                print "time per 20 iter:", (e - s)
+                print("time per 20 iter:", (e - s))
                 
         ############### Test on Validation Set ##################
 

@@ -104,7 +104,7 @@ def fun_load(config, sock_data=5000):
     sock.bind('tcp://*:{0}'.format(sock_data))
 
     shape, dtype, h = sock.recv_pyobj()
-    print 'shared_x information received'
+    print('shared_x information received')
     
     if os.environ['backend']=='gpuarray':
         gpu_data_remote_b = pygpu.gpuarray.open_ipc_handle(ctx, h, np.prod(shape)*dtype.itemsize)
@@ -116,7 +116,7 @@ def fun_load(config, sock_data=5000):
         gpu_data = gpuarray.GPUArray(shape, dtype)
 
     img_mean = recv_queue.get()
-    print 'img_mean received'
+    print('img_mean received')
 
     # The first time, do the set ups and other stuff
 

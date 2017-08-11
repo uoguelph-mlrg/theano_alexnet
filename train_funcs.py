@@ -11,7 +11,7 @@ from proc_load import crop_and_mirror
 def proc_configs(config):
     if not os.path.exists(config['weights_dir']):
         os.makedirs(config['weights_dir'])
-        print "Creat folder: " + config['weights_dir']
+        print("Creat folder: " + config['weights_dir'])
 
     return config
 
@@ -45,14 +45,14 @@ def adjust_learning_rate(config, epoch, step_idx, val_record, learning_rate):
             step_idx += 1
             if step_idx >= len(config['lr_step']):
                 step_idx = 0  # prevent index out of range error
-            print 'Learning rate changed to:', learning_rate.get_value()
+            print('Learning rate changed to:', learning_rate.get_value())
 
     if config['lr_policy'] == 'auto':
         if (epoch > 5) and (val_record[-3] - val_record[-1] <
                             config['lr_adapt_threshold']):
             learning_rate.set_value(
                 np.float32(learning_rate.get_value() / 10))
-            print 'Learning rate changed to::', learning_rate.get_value()
+            print('Learning rate changed to::', learning_rate.get_value())
 
     return step_idx
 

@@ -26,7 +26,7 @@ class AlexNet(object):
         y = T.lvector('y')
         rand = T.fvector('rand')
 
-        print '... building the model'
+        print('... building the model')
         self.layers = []
         params = []
         weight_types = []

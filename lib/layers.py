@@ -84,11 +84,11 @@ class Weight(object):
         self.val = theano.shared(value=self.np_values)
 
     def save_weight(self, dir, name):
-        print 'weight saved: ' + name
+        print('weight saved: ' + name)
         np.save(dir + name + '.npy', self.val.get_value())
 
     def load_weight(self, dir, name):
-        print 'weight loaded: ' + name
+        print('weight loaded: ' + name)
         self.np_values = np.load(dir + name + '.npy')
         self.val.set_value(self.np_values)
 
@@ -121,7 +121,7 @@ class DataLayer(object):
         self.output = self.output[
             :, crop_xs:crop_xs + cropsize, crop_ys:crop_ys + cropsize, :]
 
-        print "data layer with shape_in: " + str(image_shape)
+        print("data layer with shape_in: " + str(image_shape))
 
 
 class ConvPoolLayer(object):
@@ -206,8 +206,8 @@ class ConvPoolLayer(object):
 
             input_shuffled = input.dimshuffle(3, 0, 1, 2)  # c01b to bc01
             # in01out to outin01
-            # print image_shape_shuffled
-            # print filter_shape_shuffled
+            # print(image_shape_shuffled)
+            # print(filter_shape_shuffled)
             if group == 1:
                 W_shuffled = self.W.val.dimshuffle(3, 0, 1, 2)  # c01b to bc01
                 conv_out = dnn.dnn_conv(img=input_shuffled,
@@ -267,8 +267,8 @@ class ConvPoolLayer(object):
             self.params = [self.W0.val, self.b0.val, self.W1.val, self.b1.val]
             self.weight_type = ['W', 'b', 'W', 'b']
 
-        print "conv ({}) layer with shape_in: {}".format(lib_conv,
-                                                         str(image_shape))
+        print("conv ({}) layer with shape_in: {}".format(lib_conv,
+                                                         str(image_shape)))
 
 
 class FCLayer(object):
@@ -282,7 +282,7 @@ class FCLayer(object):
         self.output = T.maximum(lin_output, 0)
         self.params = [self.W.val, self.b.val]
         self.weight_type = ['W', 'b']
-        print 'fc layer with num_in: ' + str(n_in) + ' num_out: ' + str(n_out)
+        print('fc layer with num_in: ' + str(n_in) + ' num_out: ' + str(n_out))
 
 
 class DropoutLayer(object):
@@ -307,7 +307,7 @@ class DropoutLayer(object):
 
         DropoutLayer.layers.append(self)
 
-        print 'dropout layer with P_drop: ' + str(self.prob_drop)
+        print('dropout layer with P_drop: ' + str(self.prob_drop))
 
     @staticmethod
     def SetDropoutOn():
@@ -336,8 +336,8 @@ class SoftmaxLayer(object):
         self.params = [self.W.val, self.b.val]
         self.weight_type = ['W', 'b']
 
-        print 'softmax layer with num_in: ' + str(n_in) + \
-            ' num_out: ' + str(n_out)
+        print('softmax layer with num_in: ' + str(n_in) + \
+            ' num_out: ' + str(n_out))
 
     def negative_log_likelihood(self, y):
         return -T.mean(T.log(self.p_y_given_x)[T.arange(y.shape[0]), y])
