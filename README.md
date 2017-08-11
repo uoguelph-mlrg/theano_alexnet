@@ -1,4 +1,4 @@
-#AlexNet Implementation with Theano
+# AlexNet Implementation with Theano
 
 Demonstration of training an AlexNet in Python with Theano.
 Please see this [technical report](http://arxiv.org/abs/1412.2302) for a high level description.
@@ -20,6 +20,7 @@ If you use this in your research, we kindly ask that you cite the above report:
 * [Theano](http://deeplearning.net/software/theano/) >= 0.10
 * <s>[Pylearn2](http://deeplearning.net/software/pylearn2/)</s>
 * <s>[PyCUDA](http://mathema.tician.de/software/pycuda/)</s>
+* [NCCL](https://github.com/NVIDIA/nccl)
 * [pygpu/libgpuarray](http://deeplearning.net/software/libgpuarray/installation.html)
 * [zeromq](http://zeromq.org/bindings:python)
 * [hickle](https://github.com/telegraphic/hickle)
