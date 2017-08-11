@@ -2,18 +2,15 @@
 Train AlexNet on ImageNet with 2 GPUs.
 '''
 
-import sys
+import sys,os
 import time
 from multiprocessing import Process, Queue
 
 import yaml
 import numpy as np
 import zmq
-import pycuda.driver as drv
-import pycuda.gpuarray as gpuarray
 
-sys.path.append('./lib')
-from tools import (save_weights, load_weights,
+from lib.tools import (save_weights, load_weights,
                    save_momentums, load_momentums)
 from train_funcs import (unpack_configs, adjust_learning_rate,
                          get_val_error_loss, get_rand3d, train_model_wrap,
@@ -28,21 +25,6 @@ def train_net(config, private_config):
         unpack_configs(config, ext_data=private_config['ext_data'],
                        ext_label=private_config['ext_label'])
 
-
-    gpu_send_queue = private_config['queue_gpu_send']
-    gpu_recv_queue = private_config['queue_gpu_recv']
-
-    # pycuda and zmq set up
-    drv.init()
-    dev = drv.Device(int(private_config['gpu'][-1]))
-    ctx = dev.make_context()
-
-    sock_gpu = zmq.Context().socket(zmq.PAIR)
-    if private_config['flag_client']:
-        sock_gpu.connect('tcp://localhost:{0}'.format(config['sock_gpu']))
-    else:
-        sock_gpu.bind('tcp://*:{0}'.format(config['sock_gpu']))
-
     if flag_para_load:
         sock_data = zmq.Context().socket(zmq.PAIR)
         sock_data.connect('tcp://localhost:{0}'.format(
@@ -53,17 +35,36 @@ def train_net(config, private_config):
     else:
         load_send_queue = None
         load_recv_queue = None
+    
+    if os.environ['backend']=='gpuarray':
+        if 'THEANO_FLAGS' in os.environ:
+            raise ValueError('Use theanorc to set the theano config')
+        os.environ['THEANO_FLAGS'] = 'mode=FAST_RUN,floatX=float32,device={0}'.format(private_config['gpu'])
+        import theano.gpuarray
+        # This is a bit of black magic that may stop working in future
+        # theano releases
+        ctx = theano.gpuarray.type.get_context(None)
+        from pygpu import gpuarray
+    else:
+        import pycuda.gpuarray as gpuarray
+        # pycuda set up
+        import pycuda.driver as drv
+        drv.init()
+        dev = drv.Device(int(private_config['gpu'][-1]))
+        ctx = dev.make_context()
 
-    import theano.sandbox.cuda
-    theano.sandbox.cuda.use(private_config['gpu'])
+        import theano.sandbox.cuda
+        theano.sandbox.cuda.use(private_config['gpu'])
+
+        import theano.misc.pycuda_init
+        import theano.misc.pycuda_utils
+
     import theano
     theano.config.on_unused_input = 'warn'
 
-    from layers import DropoutLayer
+    from lib.layers import DropoutLayer
     from alex_net import AlexNet, compile_models
 
-    import theano.misc.pycuda_init
-    import theano.misc.pycuda_utils
 
     ## BUILD NETWORK ##
     model = AlexNet(config)
@@ -73,55 +74,122 @@ def train_net(config, private_config):
     ## COMPILE FUNCTIONS ##
     (train_model, validate_model, train_error, learning_rate,
      shared_x, shared_y, rand_arr, vels) = compile_models(model, config)
-
+     
+    ###################################
+    # pass information between two GPUs
+    
     total_params = model.params + vels
     # total_params = model.params
+    
+    if os.environ['backend']=='gpuarray':
+        
+        from test_gpucomm import get_intranode_comm
+        gpucomm = get_intranode_comm(ctx, local_size=2, local_rank=int(private_config['gpu'][-1]), 
+                                    seed_str=config['gpucomm_id'])
 
-    # initialize gpuarrays that points to the theano shared variable
-    # pass parameters and other stuff
-    param_ga_list = []
-    param_other_list = []
-    param_ga_other_list = []
-    h_list = []
-    shape_list = []
-    dtype_list = []
-    average_fun_list = []
+        class Exch_nccl32(object):
 
-    for param in total_params:
-        param_other = theano.shared(param.get_value())
-        param_ga = \
-            theano.misc.pycuda_utils.to_gpuarray(param.container.value)
-        param_ga_other = \
-            theano.misc.pycuda_utils.to_gpuarray(
-                param_other.container.value)
-        h = drv.mem_get_ipc_handle(param_ga.ptr)
-        average_fun = \
-            theano.function([], updates=[(param,
-                                          (param + param_other) / 2.)])
+            '''
+            Single Node reduction, taken from https://github.com/uoguelph-mlrg/Theano-MPI
+            '''
 
-        param_other_list.append(param_other)
-        param_ga_list.append(param_ga)
-        param_ga_other_list.append(param_ga_other)
-        h_list.append(h)
-        shape_list.append(param_ga.shape)
-        dtype_list.append(param_ga.dtype)
-        average_fun_list.append(average_fun)
+            def __init__(self, intracomm, avg=False):
 
-    # pass shape, dtype and handles
-    sock_gpu.send_pyobj((shape_list, dtype_list, h_list))
-    shape_other_list, dtype_other_list, h_other_list = sock_gpu.recv_pyobj()
+                self.intracomm = intracomm
+                self.intrasize = intracomm.count
+                self.intrarank = intracomm.rank
 
-    param_ga_remote_list = []
+                self.avg = avg
 
-    # create gpuarray point to the other gpu use the passed information
-    for shape_other, dtype_other, h_other in zip(shape_other_list,
-                                                 dtype_other_list,
-                                                 h_other_list):
-        param_ga_remote = \
-            gpuarray.GPUArray(shape_other, dtype_other,
-                              gpudata=drv.IPCMemoryHandle(h_other))
+            def prepare(self, ctx, source_param_list, dest_param_list=None):
+                self.source_param_list = source_param_list
+                if dest_param_list!=None:
+                    self.dest_param_list = dest_param_list
+                else:
+                    self.dest_param_list = self.source_param_list
 
-        param_ga_remote_list.append(param_ga_remote)
+                self.ctx = ctx
+
+                if self.avg:
+                    division_factor = 1.0 / self.intrasize # within node
+                    self.avg_func = theano.function(
+                        [],
+                        updates=[(param, param * division_factor)
+                                 for param in self.source_param_list])
+
+            def exchange(self):
+                # divding source param first before exchanging
+                if self.avg:
+                    self.avg_func()
+
+                for source_s, dest_s in zip(self.source_param_list,
+                                            self.dest_param_list):
+                    source = source_s.container.value
+                    source.sync()
+                    dest = dest_s.container.value
+                    dest.sync()
+                    self.intracomm.all_reduce(source, '+', dest)
+                    
+        exch = Exch_nccl32(intracomm=gpucomm, avg=True)
+        exch.prepare(ctx, total_params)
+        
+        
+    else:
+        
+        gpu_send_queue = private_config['queue_gpu_send']
+        gpu_recv_queue = private_config['queue_gpu_recv']
+
+        sock_gpu = zmq.Context().socket(zmq.PAIR)
+        if private_config['flag_client']:
+            sock_gpu.connect('tcp://localhost:{0}'.format(config['sock_gpu']))
+        else:
+            sock_gpu.bind('tcp://*:{0}'.format(config['sock_gpu']))
+
+        # initialize gpuarrays that points to the theano shared variable
+        # pass parameters and other stuff
+        param_ga_list = []
+        param_other_list = []
+        param_ga_other_list = []
+        h_list = []
+        shape_list = []
+        dtype_list = []
+        average_fun_list = []
+
+        for param in total_params:
+            param_other = theano.shared(param.get_value())
+            param_ga = \
+                theano.misc.pycuda_utils.to_gpuarray(param.container.value)
+            param_ga_other = \
+                theano.misc.pycuda_utils.to_gpuarray(
+                    param_other.container.value)
+            h = drv.mem_get_ipc_handle(param_ga.ptr)
+            average_fun = \
+                theano.function([], updates=[(param,
+                                              (param + param_other) / 2.)])
+
+            param_other_list.append(param_other)
+            param_ga_list.append(param_ga)
+            param_ga_other_list.append(param_ga_other)
+            h_list.append(h)
+            shape_list.append(param_ga.shape)
+            dtype_list.append(param_ga.dtype)
+            average_fun_list.append(average_fun)
+
+        # pass shape, dtype and handles
+        sock_gpu.send_pyobj((shape_list, dtype_list, h_list))
+        shape_other_list, dtype_other_list, h_other_list = sock_gpu.recv_pyobj()
+
+        param_ga_remote_list = []
+
+        # create gpuarray point to the other gpu use the passed information
+        for shape_other, dtype_other, h_other in zip(shape_other_list,
+                                                     dtype_other_list,
+                                                     h_other_list):
+            param_ga_remote = \
+                gpuarray.GPUArray(shape_other, dtype_other,
+                                  gpudata=drv.IPCMemoryHandle(h_other))
+
+            param_ga_remote_list.append(param_ga_remote)
 
     print "Information passed between 2 GPUs"
 
@@ -133,9 +201,16 @@ def train_net(config, private_config):
 
     if flag_para_load:
         # pass ipc handle and related information
-        gpuarray_batch = theano.misc.pycuda_utils.to_gpuarray(
-            shared_x.container.value)
-        h = drv.mem_get_ipc_handle(gpuarray_batch.ptr)
+        
+        if os.environ['backend']=='gpuarray':
+            gpuarray_batch = shared_x.container.value
+            h = gpuarray_batch.get_ipc_handle()
+    
+        else:
+            gpuarray_batch = theano.misc.pycuda_utils.to_gpuarray(
+                shared_x.container.value)
+            h = drv.mem_get_ipc_handle(gpuarray_batch.ptr)
+
         sock_data.send_pyobj((gpuarray_batch.shape, gpuarray_batch.dtype, h))
 
         load_send_queue.put(img_mean)
@@ -143,11 +218,13 @@ def train_net(config, private_config):
     n_train_batches = len(train_filenames)
     minibatch_range = range(n_train_batches)
 
-
     # gpu sync before start
-    gpu_send_queue.put('before_start')
-    assert gpu_recv_queue.get() == 'before_start'
-
+    if os.environ['backend']=='gpuarray':
+        pass
+    else:
+        gpu_send_queue.put('before_start')
+        assert gpu_recv_queue.get() == 'before_start'
+        
     # Start Training Loop
     epoch = 0
     step_idx = 0
@@ -195,38 +272,48 @@ def train_net(config, private_config):
                                        send_queue=load_send_queue,
                                        recv_queue=load_recv_queue)
 
-            # gpu sync
-            gpu_send_queue.put('after_train')
-            assert gpu_recv_queue.get() == 'after_train'
+            if os.environ['backend']=='gpuarray':
+                
+                exch.exchange()
+                
+            else:
+                # gpu sync
+                gpu_send_queue.put('after_train')
+                assert gpu_recv_queue.get() == 'after_train'
 
-            # exchanging weights
-            for param_ga, param_ga_other, param_ga_remote in \
-                    zip(param_ga_list, param_ga_other_list,
-                        param_ga_remote_list):
+                # exchanging weights
+                for param_ga, param_ga_other, param_ga_remote in \
+                        zip(param_ga_list, param_ga_other_list,
+                            param_ga_remote_list):
 
-                drv.memcpy_peer(param_ga_other.ptr,
-                                param_ga_remote.ptr,
-                                param_ga_remote.dtype.itemsize *
-                                param_ga_remote.size,
-                                ctx, ctx)
+                    drv.memcpy_peer(param_ga_other.ptr,
+                                    param_ga_remote.ptr,
+                                    param_ga_remote.dtype.itemsize *
+                                    param_ga_remote.size,
+                                    ctx, ctx)
 
-            ctx.synchronize()
+                ctx.synchronize()
 
-            # gpu sync
-            gpu_send_queue.put('after_ctx_sync')
-            assert gpu_recv_queue.get() == 'after_ctx_sync'
+                # gpu sync
+                gpu_send_queue.put('after_ctx_sync')
+                assert gpu_recv_queue.get() == 'after_ctx_sync'
 
-            # do average
-            for average_fun in average_fun_list:
-                average_fun()
+                # do average
+                for average_fun in average_fun_list:
+                    average_fun()
 
 
             # report train stats
             if num_iter % config['print_freq'] == 0:
-
-                gpu_send_queue.put(cost_ij)
-                that_cost = gpu_recv_queue.get()
-                cost_ij = (cost_ij + that_cost) / 2.
+                
+                if os.environ['backend']=='gpuarray':
+                    gpu_cost_ij = gpuarray.asarray(cost_ij, context=ctx)
+                    gpucomm.all_reduce(gpu_cost_ij, 'sum', gpu_cost_ij)
+                    cost_ij=np.asarray(gpu_cost_ij) / 2.
+                else:
+                    gpu_send_queue.put(cost_ij)
+                    that_cost = gpu_recv_queue.get()
+                    cost_ij = (cost_ij + that_cost) / 2.
 
                 if private_config['flag_verbose']:
                     print 'training @ iter = ', num_iter
@@ -234,10 +321,15 @@ def train_net(config, private_config):
 
                 if config['print_train_error']:
                     error_ij = train_error()
-
-                    gpu_send_queue.put(error_ij)
-                    that_error = gpu_recv_queue.get()
-                    error_ij = (error_ij + that_error) / 2.
+                    
+                    if os.environ['backend']=='gpuarray':
+                        gpu_error_ij = gpuarray.asarray(error_ij, context=ctx)
+                        gpucomm.all_reduce(gpu_error_ij, 'sum', gpu_error_ij)
+                        error_ij = np.asarray(gpu_error_ij) / 2.
+                    else:
+                        gpu_send_queue.put(error_ij)
+                        that_error = gpu_recv_queue.get()
+                        error_ij = (error_ij + that_error) / 2.
 
                     if private_config['flag_verbose']:
                         print 'training error rate:', error_ij
@@ -295,13 +387,13 @@ def train_net(config, private_config):
                 save_momentums(vels, config['weights_dir'], epoch)
 
     print('Optimization complete.')
-
-
+    
 if __name__ == '__main__':
 
     with open('config.yaml', 'r') as f:
         config = yaml.load(f)
     with open('spec_2gpu.yaml', 'r') as f:
+        # config = {**config,**yaml.load(f)} # python3
         config = dict(config.items() + yaml.load(f).items())
 
     config = proc_configs(config)
@@ -309,9 +401,13 @@ if __name__ == '__main__':
 
 
 
-
-    queue_gpu_0to1 = Queue(1)
-    queue_gpu_1to0 = Queue(1)
+    if os.environ['backend']=='gpuarray':
+        config['gpucomm_id']=str(os.getpid())
+        queue_gpu_0to1=None
+        queue_gpu_1to0=None
+    else:
+        queue_gpu_0to1 = Queue(1)
+        queue_gpu_1to0 = Queue(1)
 
     private_config_0 = {}
     private_config_0['queue_gpu_send'] = queue_gpu_0to1

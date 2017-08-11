@@ -54,8 +54,7 @@ backend=gpuarray <s>THEANO_FLAGS=mode=FAST_RUN,floatX=float32</s> python train.p
 
 2-GPU version, run:
 
-under developing
-<s>THEANO_FLAGS=mode=FAST_RUN,floatX=float32 python train_2gpu.py</s>
+backend=gpuarray <s>THEANO_FLAGS=mode=FAST_RUN,floatX=float32</s> python train_2gpu.py
 
 Validation error and loss values are stored as weights_dir/val_record.npy
 

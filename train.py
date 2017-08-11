@@ -6,8 +6,7 @@ import yaml
 import numpy as np
 import zmq
 
-sys.path.append('./lib')
-from tools import (save_weights, load_weights,
+from lib.tools import (save_weights, load_weights,
                    save_momentums, load_momentums)
 from train_funcs import (unpack_configs, adjust_learning_rate,
                          get_val_error_loss, get_rand3d, train_model_wrap,
@@ -46,8 +45,8 @@ def train_net(config):
         dev = drv.Device(int(config['gpu'][-1]))
         ctx = dev.make_context()
         
-        import theano.gpuarray
-        theano.gpuarray.use(config['gpu'])
+        import theano.sandbox.cuda
+        theano.sandbox.cuda.use(private_config['gpu'])
         
         import theano.misc.pycuda_init
         import theano.misc.pycuda_utils
@@ -55,7 +54,7 @@ def train_net(config):
     import theano
     theano.config.on_unused_input = 'warn'
 
-    from layers import DropoutLayer
+    from lib.layers import DropoutLayer
     from alex_net import AlexNet, compile_models
 
     ## BUILD NETWORK ##

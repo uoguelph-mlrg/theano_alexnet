@@ -57,7 +57,12 @@ class CrossChannelNormalization(object):
         sq = T.set_subtensor(extra_channels[half:half+ch,:,:,:], sq)
 
         scale = self.k
-
+        
+        try: 
+            xrange 
+        except NameError: 
+            xrange = range
+        
         for i in xrange(self.n):
             scale += self.alpha * sq[i:i+ch,:,:,:]
 
@@ -101,7 +106,7 @@ class DataLayer(object):
         input = T.concatenate([input, mirror], axis=0)
 
         # crop images
-        center_margin = (image_shape[2] - cropsize) / 2
+        center_margin = (image_shape[2] - cropsize) // 2
 
         if flag_rand:
             mirror_rand = T.cast(rand[2], 'int32')
@@ -149,10 +154,10 @@ class ConvPoolLayer(object):
             self.W = Weight(self.filter_shape)
             self.b = Weight(self.filter_shape[3], bias_init, std=0)
         else:
-            self.filter_shape[0] = self.filter_shape[0] / 2
-            self.filter_shape[3] = self.filter_shape[3] / 2
-            self.image_shape[0] = self.image_shape[0] / 2
-            self.image_shape[3] = self.image_shape[3] / 2
+            self.filter_shape[0] = self.filter_shape[0] // 2
+            self.filter_shape[3] = self.filter_shape[3] // 2
+            self.image_shape[0] = self.image_shape[0] // 2
+            self.image_shape[3] = self.image_shape[3] // 2
             self.W0 = Weight(self.filter_shape)
             self.W1 = Weight(self.filter_shape)
             self.b0 = Weight(self.filter_shape[3], bias_init, std=0)
@@ -171,7 +176,7 @@ class ConvPoolLayer(object):
                 conv_out = conv_out + self.b.val.dimshuffle(0, 'x', 'x', 'x')
             else:
                 contiguous_input0 = gpu_contiguous(
-                    input[:self.channel / 2, :, :, :])
+                    input[:self.channel // 2, :, :, :])
                 contiguous_filters0 = gpu_contiguous(self.W0.val)
                 conv_out0 = self.conv_op(
                     contiguous_input0, contiguous_filters0)
@@ -179,7 +184,7 @@ class ConvPoolLayer(object):
                     self.b0.val.dimshuffle(0, 'x', 'x', 'x')
 
                 contiguous_input1 = gpu_contiguous(
-                    input[self.channel / 2:, :, :, :])
+                    input[self.channel // 2:, :, :, :])
                 contiguous_filters1 = gpu_contiguous(self.W1.val)
                 conv_out1 = self.conv_op(
                     contiguous_input1, contiguous_filters1)
@@ -215,7 +220,7 @@ class ConvPoolLayer(object):
                 W0_shuffled = \
                     self.W0.val.dimshuffle(3, 0, 1, 2)  # c01b to bc01
                 conv_out0 = \
-                    dnn.dnn_conv(img=input_shuffled[:, :self.channel / 2,
+                    dnn.dnn_conv(img=input_shuffled[:, :self.channel // 2,
                                                     :, :],
                                  kerns=W0_shuffled,
                                  subsample=(convstride, convstride),
@@ -226,7 +231,7 @@ class ConvPoolLayer(object):
                 W1_shuffled = \
                     self.W1.val.dimshuffle(3, 0, 1, 2)  # c01b to bc01
                 conv_out1 = \
-                    dnn.dnn_conv(img=input_shuffled[:, self.channel / 2:,
+                    dnn.dnn_conv(img=input_shuffled[:, self.channel // 2:,
                                                     :, :],
                                  kerns=W1_shuffled,
                                  subsample=(convstride, convstride),
