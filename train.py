@@ -32,13 +32,16 @@ def train_net(config):
 
     if os.environ['backend']=='gpuarray':
         if 'THEANO_FLAGS' in os.environ:
-            raise ValueError('Use theanorc to set the theano config')
+            raise ValueError('Use .theanorc to set the theano config')
         os.environ['THEANO_FLAGS'] = 'mode=FAST_RUN,floatX=float32,device={0}'.format(config['gpu'])
         import theano.gpuarray
         # This is a bit of black magic that may stop working in future
         # theano releases
         ctx = theano.gpuarray.type.get_context(None)
     else:
+        if 'THEANO_FLAGS' in os.environ:
+            raise ValueError('Use .theanorc to set the theano config')
+        os.environ['THEANO_FLAGS'] = 'mode=FAST_RUN,floatX=float32'
         # pycuda set up
         import pycuda.driver as drv
         drv.init()
@@ -130,7 +133,7 @@ def train_net(config):
                 s = time.time()
             if count == 20:
                 e = time.time()
-                print "time per 20 iter:", (e - s)
+                print "time per 20 iter: %.2f" % (e - s)
 
             cost_ij = train_model_wrap(train_model, shared_x,
                                        shared_y, rand_arr, img_mean,

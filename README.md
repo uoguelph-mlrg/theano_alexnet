@@ -61,6 +61,8 @@ Validation error and loss values are stored as weights_dir/val_record.npy
 
 Here we do not set device to gpu in THEANO_FLAGS. Instead, users should control which GPU(s) to use in spec_1gpu.yaml and spec_2gpu.yaml.
 
+To cleanup unclosed sockets, use `netstat -ltnp` to check the PID of the processes opening them, and `kill -9 {PID}` to close them. Use `CUDA_VISIBLE_DEVICES=2,3` to use a second group of two-GPU training on the same host if it has >=4 GPUs.
+
 ### Pretrained AlexNet
 
 Pretrained AlexNet weights and configurations can be found at [pretrained/alexnet](https://github.com/uoguelph-mlrg/theano_alexnet/tree/master/pretrained/alexnet)

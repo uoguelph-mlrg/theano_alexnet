@@ -38,7 +38,7 @@ def train_net(config, private_config):
     
     if os.environ['backend']=='gpuarray':
         if 'THEANO_FLAGS' in os.environ:
-            raise ValueError('Use theanorc to set the theano config')
+            raise ValueError('Use .theanorc to set the theano config')
         os.environ['THEANO_FLAGS'] = 'mode=FAST_RUN,floatX=float32,device={0}'.format(private_config['gpu'])
         import theano.gpuarray
         # This is a bit of black magic that may stop working in future
@@ -46,6 +46,9 @@ def train_net(config, private_config):
         ctx = theano.gpuarray.type.get_context(None)
         from pygpu import gpuarray
     else:
+        if 'THEANO_FLAGS' in os.environ:
+            raise ValueError('Use .theanorc to set the theano config')
+        os.environ['THEANO_FLAGS'] = 'mode=FAST_RUN,floatX=float32'
         import pycuda.gpuarray as gpuarray
         # pycuda set up
         import pycuda.driver as drv
@@ -85,7 +88,7 @@ def train_net(config, private_config):
         
         from test_gpucomm import get_intranode_comm
         gpucomm = get_intranode_comm(ctx, local_size=2, local_rank=int(private_config['gpu'][-1]), 
-                                    seed_str=config['gpucomm_id'])
+                                    seed_str=str(config['gpucomm_id']))
 
         class Exch_nccl32(object):
 
@@ -316,8 +319,8 @@ def train_net(config, private_config):
                     cost_ij = (cost_ij + that_cost) / 2.
 
                 if private_config['flag_verbose']:
-                    print('training @ iter = ', num_iter)
-                    print('training cost:', cost_ij)
+                    print('training @ iter = %d' % num_iter)
+                    print('training cost: %f' % cost_ij)
 
                 if config['print_train_error']:
                     error_ij = train_error()
@@ -332,14 +335,14 @@ def train_net(config, private_config):
                         error_ij = (error_ij + that_error) / 2.
 
                     if private_config['flag_verbose']:
-                        print('training error rate:', error_ij)
+                        print('training error rate: %f' % error_ij)
 
             if flag_para_load and (count < len(minibatch_range)):
                 load_send_queue.put('calc_finished')
 
             if count%20 == 0:
                 e = time.time()
-                print("time per 20 iter:", (e - s))
+                if private_config['flag_verbose']: print("time per 20 iter: %.2f" % (e - s))
                 
         ############### Test on Validation Set ##################
 
@@ -353,13 +356,22 @@ def train_net(config, private_config):
             send_queue=load_send_queue, recv_queue=load_recv_queue)
 
         # report validation stats
-        gpu_send_queue.put(this_val_error)
-        that_val_error = gpu_recv_queue.get()
-        this_val_error = (this_val_error + that_val_error) / 2.
+        if os.environ['backend']=='gpuarray':
+            gpu_this_val_error = gpuarray.asarray(this_val_error, context=ctx)
+            gpucomm.all_reduce(gpu_this_val_error, 'sum', gpu_this_val_error)
+            this_val_error=np.asarray(gpu_this_val_error) / 2.
+            
+            gpu_this_val_loss = gpuarray.asarray(this_val_loss, context=ctx)
+            gpucomm.all_reduce(gpu_this_val_loss, 'sum', gpu_this_val_loss)
+            this_val_loss=np.asarray(gpu_this_val_loss) / 2.
+        else:
+            gpu_send_queue.put(this_val_error)
+            that_val_error = gpu_recv_queue.get()
+            this_val_error = (this_val_error + that_val_error) / 2.
 
-        gpu_send_queue.put(this_val_loss)
-        that_val_loss = gpu_recv_queue.get()
-        this_val_loss = (this_val_loss + that_val_loss) / 2.
+            gpu_send_queue.put(this_val_loss)
+            that_val_loss = gpu_recv_queue.get()
+            this_val_loss = (this_val_loss + that_val_loss) / 2.
 
         if private_config['flag_verbose']:
             print('epoch %i: validation loss %f ' %
@@ -398,21 +410,19 @@ if __name__ == '__main__':
 
     config = proc_configs(config)
 
-
-
-
+    config['gpucomm_id']=os.getpid()
     if os.environ['backend']=='gpuarray':
-        config['gpucomm_id']=str(os.getpid())
         queue_gpu_0to1=None
         queue_gpu_1to0=None
     else:
+        config['sock_gpu']=config['gpucomm_id']+1024
         queue_gpu_0to1 = Queue(1)
         queue_gpu_1to0 = Queue(1)
 
     private_config_0 = {}
     private_config_0['queue_gpu_send'] = queue_gpu_0to1
     private_config_0['queue_gpu_recv'] = queue_gpu_1to0
-    private_config_0['sock_data'] = config['sock_data0']
+    private_config_0['sock_data'] = config['gpucomm_id']+1025 #config['sock_data0']
     private_config_0['gpu'] = config['gpu0']
     private_config_0['ext_data'] = '.hkl'
     private_config_0['ext_label'] = '.npy'
@@ -425,7 +435,7 @@ if __name__ == '__main__':
     private_config_1 = {}
     private_config_1['queue_gpu_send'] = queue_gpu_1to0
     private_config_1['queue_gpu_recv'] = queue_gpu_0to1
-    private_config_1['sock_data'] = config['sock_data1']
+    private_config_1['sock_data'] = config['gpucomm_id']+1026 #config['sock_data1']
     private_config_1['gpu'] = config['gpu1']
     private_config_1['ext_data'] = '_1.hkl'
     private_config_1['ext_label'] = '_1.npy'

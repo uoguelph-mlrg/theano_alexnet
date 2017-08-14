@@ -2,9 +2,9 @@
 
 gpu0: 'cuda0'
 gpu1: 'cuda1'
-sock_gpu: 5000
-sock_data0: 5001
-sock_data1: 5002
+# sock_gpu: 5000
+# sock_data0: 5003
+# sock_data1: 5004
 
 batch_size: 128 # def: 128
 
